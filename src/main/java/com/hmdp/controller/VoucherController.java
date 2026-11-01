@@ -31,6 +31,7 @@ public class VoucherController {
     @PostMapping
     public Result addVoucher(@RequestBody Voucher voucher) {
         voucherService.save(voucher);
+        // Lombok 生成的 getter 方法
         return Result.ok(voucher.getId());
     }
 

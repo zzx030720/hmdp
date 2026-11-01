@@ -19,6 +19,7 @@ public class LoginInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // request.getSession() 拿到的是各自不同的 session
 
+        //这里再第一个拦截器已经把当前用户输入的信息存入ThreadLocal中了,所以直接判断就行
         // 1.判断是否拦截(ThreadContextLocal中是否有用户)
         if (UserHolder.getUser() == null) {
             // 拦截

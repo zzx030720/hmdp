@@ -9,6 +9,7 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisData;
 import io.netty.util.internal.ThreadLocalRandom;
 import jakarta.annotation.Resource;
@@ -36,16 +37,27 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private CacheClient cacheClient;
     @Override
     public Result queryById(Long id) {
         //缓存穿透
 //        Shop shop = queryWithPassThrough(id);
-
+//        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_NULL_TTL, TimeUnit.MINUTES);
         //互斥锁解决缓存击穿
 //        Shop shop = queryWithMutex(id);
 
         //逻辑过期解决缓存击穿
-        Shop shop = queryWithLogicalExpire(id);
+//        Shop shop = queryWithLogicalExpire(id);
+
+        /**
+         * 手动测试逻辑过期有没有实现,首先连续查询ID为1的数据,
+         * 终端只返回一次时数据库查询,过了一会再查一次又返回一次数据库查询
+         * 说明判断逻辑时间过期了,所以又查了一遍数据库,说明逻辑过期代码没有问题
+         */
+        Shop shop = cacheClient.
+                queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.SECONDS);
         if (shop == null) {
             return Result.fail("店铺不存在");
         }
@@ -69,7 +81,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return shop;
         }
 
-        //判断是否空值,空字符串
+        //判断是否空值,空字符串,之前已经查过数据库、确认数据不存在并且缓存了空值
         if (shopJson != null) {
             return null;
         }

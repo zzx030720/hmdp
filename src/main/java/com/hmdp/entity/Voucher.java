@@ -29,6 +29,8 @@ public class Voucher implements Serializable {
 
     /**
      * 主键
+     * 告诉 MyBatis-Plus “这个字段是主键”。
+     * getById()、updateById()、removeById() 都依赖它，MP 靠它拼出 WHERE id = ?
      */
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
