@@ -119,7 +119,7 @@ public class CacheClient {
             return r;
         }
 
-        String shopJson1 = stringRedisTemplate.opsForValue().get(CACHE_SHOP_KEY + id);
+        String shopJson1 = stringRedisTemplate.opsForValue().get(key);
 //        //2.判断是否存在
 //        if (StrUtil.isBlank(shopJson1)) {
 //            //3.不存在,返回错误
