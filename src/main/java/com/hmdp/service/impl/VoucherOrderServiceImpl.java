@@ -8,9 +8,13 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import jakarta.annotation.Resource;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +37,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource //注入订单ID
     private RedisIdWorker redisIdWorker;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private RedissonClient redissonClient;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         // 1.查询优惠券
@@ -49,13 +59,42 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("库存不足");
         }
 
-        // 7.返回订单ID,使用 synchronized 关键字确保线程安全
         Long userId = UserHolder.getUser().getId();
-        synchronized (userId.toString().intern()) {
+
+        /**
+         * 这代码主要是防止同一时间相同用户下多单,
+         * 不同时间用户下单是下面的createVoucherOrder方法来进行判断
+         *
+         */
+        //创建锁对象,锁的是对象,所以name里要加userid
+//        SimpleRedisLock lock = new SimpleRedisLock(stringRedisTemplate, "order:" + userId);
+        RLock lock = redissonClient.getLock("lock:order:" + userId);
+
+        //尝试获取锁
+//        boolean isLocked = lock.tryLock(1200);
+        boolean isLocked = lock.tryLock();
+        //判断是否获取锁成功
+        if (!isLocked) {
+            //不成功,返回错误信息
+            return Result.fail("请勿重复下单");
+        }
+        try {
             //获取代理对象(事务)
+            /**
+             * @Transactional 像公司报销流程上的公章。
+             * 你自己(原始对象)拿钱买完东西再在自己单子上盖个章 —— 章无效,
+             * 因为章在行政那里(代理)。
+             * 而 this.createVoucherOrder() 就是"自己盖";
+             * AopContext.currentProxy() 是"把单子重新递交回行政窗口,让行政盖章"。
+             */
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
         }
+//        }
     }
 
     @Transactional
